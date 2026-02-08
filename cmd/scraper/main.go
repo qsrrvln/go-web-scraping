@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"regexp"
 	"strings"
+	"sync/atomic"
 
 	"go-scraper-engine/internal/config"
 	"go-scraper-engine/internal/fetcher"
@@ -13,6 +15,17 @@ import (
 
 	"github.com/gocolly/colly/v2"
 )
+
+// whitespaceRegex matches multiple whitespace characters (spaces, tabs, newlines).
+var whitespaceRegex = regexp.MustCompile(`[\s\t\n\r]+`)
+
+// cleanText removes extra whitespace, newlines, and tabs from text.
+func cleanText(s string) string {
+	// Replace multiple whitespace with single space
+	cleaned := whitespaceRegex.ReplaceAllString(s, " ")
+	// Trim leading/trailing whitespace
+	return strings.TrimSpace(cleaned)
+}
 
 func main() {
 	// Initialize structured JSON logger
@@ -38,6 +51,7 @@ func run(logger *slog.Logger, cfg *config.Config) error {
 	logger.Info("Starting scraper for target",
 		slog.String("url", cfg.Scraper.StartURL),
 		slog.String("app", cfg.App.Name),
+		slog.Int("max_pages", cfg.Scraper.MaxPages),
 	)
 
 	// Initialize CSV writer for persistence
@@ -46,6 +60,9 @@ func run(logger *slog.Logger, cfg *config.Config) error {
 		return fmt.Errorf("failed to create CSV writer: %w", err)
 	}
 	defer writer.Close()
+
+	// Page counter for pagination limit (atomic for thread safety)
+	var pageCounter int32 = 1
 
 	// Initialize the collector via dependency injection with config options
 	collector, err := fetcher.NewScraper(fetcher.ScraperOptions{
@@ -60,11 +77,12 @@ func run(logger *slog.Logger, cfg *config.Config) error {
 
 	// Define OnHTML callback for product extraction using configured selectors
 	collector.OnHTML(cfg.Selectors.Container, func(e *colly.HTMLElement) {
+		// Extract and clean text fields
 		product := models.Product{
-			ID:     e.Attr("data-id"),
-			Name:   strings.TrimSpace(e.ChildText(cfg.Selectors.Title)),
-			Price:  strings.TrimSpace(e.ChildText(cfg.Selectors.Price)),
-			Rating: strings.TrimSpace(e.ChildText(".rating")),
+			ID:     cleanText(e.Attr("data-id")),
+			Name:   cleanText(e.ChildText(cfg.Selectors.Title)),
+			Price:  cleanText(e.ChildText(cfg.Selectors.Price)),
+			Rating: cleanText(e.ChildText(".rating")),
 			URL:    e.Request.AbsoluteURL(e.ChildAttr(cfg.Selectors.URL, "href")),
 		}
 
@@ -82,6 +100,38 @@ func run(logger *slog.Logger, cfg *config.Config) error {
 			slog.String("name", product.Name),
 			slog.String("price", product.Price),
 		)
+	})
+
+	// Define OnHTML callback for pagination
+	collector.OnHTML(cfg.Selectors.Pagination, func(e *colly.HTMLElement) {
+		nextPageURL := e.Attr("href")
+		if nextPageURL == "" {
+			return
+		}
+
+		currentPage := atomic.LoadInt32(&pageCounter)
+		if int(currentPage) >= cfg.Scraper.MaxPages {
+			logger.Info("Reached max pages limit",
+				slog.Int("max_pages", cfg.Scraper.MaxPages),
+			)
+			return
+		}
+
+		// Increment page counter
+		atomic.AddInt32(&pageCounter, 1)
+
+		absoluteURL := e.Request.AbsoluteURL(nextPageURL)
+		logger.Info("Visiting next page",
+			slog.String("url", absoluteURL),
+			slog.Int("page", int(currentPage)+1),
+		)
+
+		if err := e.Request.Visit(absoluteURL); err != nil {
+			logger.Error("failed to visit next page",
+				slog.String("url", absoluteURL),
+				slog.String("error", err.Error()),
+			)
+		}
 	})
 
 	// Error handling callback
@@ -106,6 +156,8 @@ func run(logger *slog.Logger, cfg *config.Config) error {
 	// Wait for async collector to finish
 	collector.Wait()
 
-	logger.Info("scraping completed")
+	logger.Info("scraping completed",
+		slog.Int("pages_scraped", int(atomic.LoadInt32(&pageCounter))),
+	)
 	return nil
 }

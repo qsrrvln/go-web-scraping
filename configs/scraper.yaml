@@ -8,9 +8,11 @@ scraper:
   max_depth: 2
   parallelism: 2
   delay: 2s
+  max_pages: 5
 
 selectors:
   container: "li.product"
   title: "h2.woocommerce-loop-product__title"
   price: "span.price"
   url: "a.woocommerce-LoopProduct-link"
+  pagination: "a.next"

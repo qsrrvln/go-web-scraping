@@ -27,14 +27,16 @@ type ScraperConfig struct {
 	MaxDepth    int           `mapstructure:"max_depth"`
 	Parallelism int           `mapstructure:"parallelism"`
 	Delay       time.Duration `mapstructure:"delay"`
+	MaxPages    int           `mapstructure:"max_pages"`
 }
 
 // SelectorsConfig holds CSS selectors for data extraction.
 type SelectorsConfig struct {
-	Container string `mapstructure:"container"`
-	Title     string `mapstructure:"title"`
-	Price     string `mapstructure:"price"`
-	URL       string `mapstructure:"url"`
+	Container  string `mapstructure:"container"`
+	Title      string `mapstructure:"title"`
+	Price      string `mapstructure:"price"`
+	URL        string `mapstructure:"url"`
+	Pagination string `mapstructure:"pagination"`
 }
 
 // LoadConfig reads configuration from the specified path.
@@ -52,10 +54,12 @@ func LoadConfig(path string) (*Config, error) {
 	viper.SetDefault("scraper.max_depth", 2)
 	viper.SetDefault("scraper.parallelism", 2)
 	viper.SetDefault("scraper.delay", "2s")
+	viper.SetDefault("scraper.max_pages", 5)
 	viper.SetDefault("selectors.container", ".product-card")
 	viper.SetDefault("selectors.title", ".title")
 	viper.SetDefault("selectors.price", ".price")
 	viper.SetDefault("selectors.url", "a")
+	viper.SetDefault("selectors.pagination", "a.next")
 
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
