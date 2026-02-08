@@ -9,6 +9,7 @@ import (
 	"go-scraper-engine/internal/config"
 	"go-scraper-engine/internal/fetcher"
 	"go-scraper-engine/internal/models"
+	"go-scraper-engine/internal/storage"
 
 	"github.com/gocolly/colly/v2"
 )
@@ -39,6 +40,13 @@ func run(logger *slog.Logger, cfg *config.Config) error {
 		slog.String("app", cfg.App.Name),
 	)
 
+	// Initialize CSV writer for persistence
+	writer, err := storage.NewCSVWriter("products.csv")
+	if err != nil {
+		return fmt.Errorf("failed to create CSV writer: %w", err)
+	}
+	defer writer.Close()
+
 	// Initialize the collector via dependency injection with config options
 	collector, err := fetcher.NewScraper(fetcher.ScraperOptions{
 		UserAgent:   cfg.Scraper.UserAgent,
@@ -60,12 +68,19 @@ func run(logger *slog.Logger, cfg *config.Config) error {
 			URL:    e.Request.AbsoluteURL(e.ChildAttr(cfg.Selectors.URL, "href")),
 		}
 
-		logger.Info("product scraped",
-			slog.String("id", product.ID),
+		// Write to CSV file
+		if err := writer.Write(product); err != nil {
+			logger.Error("failed to write product to CSV",
+				slog.String("name", product.Name),
+				slog.String("error", err.Error()),
+			)
+			return
+		}
+
+		// Log success indicator
+		logger.Info("Saved",
 			slog.String("name", product.Name),
 			slog.String("price", product.Price),
-			slog.String("rating", product.Rating),
-			slog.String("url", product.URL),
 		)
 	})
 
