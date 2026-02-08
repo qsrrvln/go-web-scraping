@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"go-scraper-engine/internal/config"
 	"go-scraper-engine/internal/fetcher"
 	"go-scraper-engine/internal/models"
 
@@ -17,32 +18,46 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
+	// Load configuration
+	cfg, err := config.LoadConfig(".")
+	if err != nil {
+		logger.Error("failed to load config", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+
 	// Run the scraper
-	if err := run(logger); err != nil {
+	if err := run(logger, cfg); err != nil {
 		logger.Error("scraper failed", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 }
 
-func run(logger *slog.Logger) error {
-	// Initialize the collector via dependency injection
-	collector, err := fetcher.NewScraper()
+func run(logger *slog.Logger, cfg *config.Config) error {
+	// Log startup message with target URL
+	logger.Info("Starting scraper for target",
+		slog.String("url", cfg.Scraper.StartURL),
+		slog.String("app", cfg.App.Name),
+	)
+
+	// Initialize the collector via dependency injection with config options
+	collector, err := fetcher.NewScraper(fetcher.ScraperOptions{
+		UserAgent:   cfg.Scraper.UserAgent,
+		MaxDepth:    cfg.Scraper.MaxDepth,
+		Parallelism: cfg.Scraper.Parallelism,
+		Delay:       cfg.Scraper.Delay,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to create scraper: %w", err)
 	}
 
-	// Placeholder target URL (replace with actual e-commerce site)
-	targetURL := "https://example.com/products"
-
-	// Define OnHTML callback for product extraction
-	// Using placeholder selectors for generic e-commerce structure
-	collector.OnHTML(".product-card", func(e *colly.HTMLElement) {
+	// Define OnHTML callback for product extraction using configured selectors
+	collector.OnHTML(cfg.Selectors.Container, func(e *colly.HTMLElement) {
 		product := models.Product{
 			ID:     e.Attr("data-id"),
-			Name:   strings.TrimSpace(e.ChildText(".title")),
-			Price:  strings.TrimSpace(e.ChildText(".price")),
+			Name:   strings.TrimSpace(e.ChildText(cfg.Selectors.Title)),
+			Price:  strings.TrimSpace(e.ChildText(cfg.Selectors.Price)),
 			Rating: strings.TrimSpace(e.ChildText(".rating")),
-			URL:    e.Request.AbsoluteURL(e.ChildAttr("a", "href")),
+			URL:    e.Request.AbsoluteURL(e.ChildAttr(cfg.Selectors.URL, "href")),
 		}
 
 		logger.Info("product scraped",
@@ -68,9 +83,9 @@ func run(logger *slog.Logger) error {
 		logger.Info("visiting", slog.String("url", r.URL.String()))
 	})
 
-	// Start scraping
-	if err := collector.Visit(targetURL); err != nil {
-		return fmt.Errorf("failed to visit %s: %w", targetURL, err)
+	// Start scraping using configured start URL
+	if err := collector.Visit(cfg.Scraper.StartURL); err != nil {
+		return fmt.Errorf("failed to visit %s: %w", cfg.Scraper.StartURL, err)
 	}
 
 	// Wait for async collector to finish

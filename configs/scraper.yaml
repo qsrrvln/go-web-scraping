@@ -1,0 +1,16 @@
+app:
+  name: "go-scraper-engine"
+  timeout: 60s
+
+scraper:
+  start_url: "https://www.scrapingcourse.com/ecommerce/"
+  user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  max_depth: 2
+  parallelism: 2
+  delay: 2s
+
+selectors:
+  container: "li.product"
+  title: "h2.woocommerce-loop-product__title"
+  price: "span.price"
+  url: "a.woocommerce-LoopProduct-link"
