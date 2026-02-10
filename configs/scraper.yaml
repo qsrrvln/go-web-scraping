@@ -10,20 +10,20 @@ scraper:
   max_pages: 5
 
 sites:
-  - name: "PracticeSite1"
-    url: "https://www.scrapingcourse.com/ecommerce/"
+  - name: "Nike Etalase (Listing)"
+    url: "https://www.nike.com/id/w/mens-shoes-nik1zy7ok"
     selectors:
-      container: "li.product"
-      title: "h2.woocommerce-loop-product__title"
-      price: "span.price"
-      url: "a.woocommerce-LoopProduct-link"
-      pagination: "a.next"
+      container: "[data-testid='product-card__body']"
+      title: ".product-card__title"
+      price: "[data-testid='product-price']"
+      url: "a.product-card__link-overlay"
+      pagination: ""
 
-  - name: "PracticeSite2"
-    url: "https://www.scrapingcourse.com/ecommerce/"
-    selectors:
-      container: "li.product"
-      title: "h2.woocommerce-loop-product__title"
-      price: "span.price"
-      url: "a.woocommerce-LoopProduct-link"
-      pagination: "a.next"
+  # - name: "PracticeSite2"
+  #   url: "https://www.scrapingcourse.com/ecommerce/"
+  #   selectors:
+  #     container: "li.product"
+  #     title: "h2.woocommerce-loop-product__title"
+  #     price: "span.price"
+  #     url: "a.woocommerce-LoopProduct-link"
+  #     pagination: "a.next"
