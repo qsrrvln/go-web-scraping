@@ -3,16 +3,27 @@ app:
   timeout: 60s
 
 scraper:
-  start_url: "https://www.scrapingcourse.com/ecommerce/"
   user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
   max_depth: 2
   parallelism: 2
   delay: 2s
   max_pages: 5
 
-selectors:
-  container: "li.product"
-  title: "h2.woocommerce-loop-product__title"
-  price: "span.price"
-  url: "a.woocommerce-LoopProduct-link"
-  pagination: "a.next"
+sites:
+  - name: "PracticeSite1"
+    url: "https://www.scrapingcourse.com/ecommerce/"
+    selectors:
+      container: "li.product"
+      title: "h2.woocommerce-loop-product__title"
+      price: "span.price"
+      url: "a.woocommerce-LoopProduct-link"
+      pagination: "a.next"
+
+  - name: "PracticeSite2"
+    url: "https://www.scrapingcourse.com/ecommerce/"
+    selectors:
+      container: "li.product"
+      title: "h2.woocommerce-loop-product__title"
+      price: "span.price"
+      url: "a.woocommerce-LoopProduct-link"
+      pagination: "a.next"
