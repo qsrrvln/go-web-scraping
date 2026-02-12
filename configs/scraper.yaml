@@ -8,6 +8,11 @@ scraper:
   parallelism: 2
   delay: 2s
   max_pages: 5
+  use_renderer: true
+  scroll_timeout: 30s
+  scroll_delay: 2s
+  viewport_width: 1920
+  viewport_height: 1080
 
 sites:
   - name: "Nike Etalase (Listing)"

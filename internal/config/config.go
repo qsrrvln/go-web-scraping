@@ -22,11 +22,16 @@ type AppConfig struct {
 
 // ScraperConfig holds shared scraper settings.
 type ScraperConfig struct {
-	UserAgent   string        `mapstructure:"user_agent"`
-	MaxDepth    int           `mapstructure:"max_depth"`
-	Parallelism int           `mapstructure:"parallelism"`
-	Delay       time.Duration `mapstructure:"delay"`
-	MaxPages    int           `mapstructure:"max_pages"`
+	UserAgent      string        `mapstructure:"user_agent"`
+	MaxDepth       int           `mapstructure:"max_depth"`
+	Parallelism    int           `mapstructure:"parallelism"`
+	Delay          time.Duration `mapstructure:"delay"`
+	MaxPages       int           `mapstructure:"max_pages"`
+	UseRenderer    bool          `mapstructure:"use_renderer"`
+	ScrollTimeout  time.Duration `mapstructure:"scroll_timeout"`
+	ScrollDelay    time.Duration `mapstructure:"scroll_delay"`
+	ViewportWidth  int           `mapstructure:"viewport_width"`
+	ViewportHeight int           `mapstructure:"viewport_height"`
 }
 
 // SiteConfig holds per-site scraping configuration.
@@ -61,6 +66,11 @@ func LoadConfig(path string) (*Config, error) {
 	viper.SetDefault("scraper.parallelism", 2)
 	viper.SetDefault("scraper.delay", "2s")
 	viper.SetDefault("scraper.max_pages", 5)
+	viper.SetDefault("scraper.use_renderer", false)
+	viper.SetDefault("scraper.scroll_timeout", "30s")
+	viper.SetDefault("scraper.scroll_delay", "2s")
+	viper.SetDefault("scraper.viewport_width", 1920)
+	viper.SetDefault("scraper.viewport_height", 1080)
 
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)

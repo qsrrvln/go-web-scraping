@@ -14,6 +14,7 @@ import (
 	"go-scraper-engine/internal/models"
 	"go-scraper-engine/internal/storage"
 
+	"github.com/PuerkitoBio/goquery"
 	"github.com/gocolly/colly/v2"
 )
 
@@ -49,6 +50,7 @@ func run(logger *slog.Logger, cfg *config.Config) error {
 	logger.Info("Starting scraper engine",
 		slog.String("app", cfg.App.Name),
 		slog.Int("total_sites", len(cfg.Sites)),
+		slog.Bool("use_renderer", cfg.Scraper.UseRenderer),
 	)
 
 	var wg sync.WaitGroup
@@ -82,10 +84,91 @@ func run(logger *slog.Logger, cfg *config.Config) error {
 }
 
 // scrapeSite handles scraping for a single site configuration.
+// It switches between Colly (static) and Chromedp (dynamic renderer) based on config.
 func scrapeSite(logger *slog.Logger, cfg *config.Config, site config.SiteConfig) error {
+	if cfg.Scraper.UseRenderer {
+		return scrapeWithRenderer(logger, cfg, site)
+	}
+	return scrapeWithColly(logger, cfg, site)
+}
+
+// scrapeWithRenderer uses Chromedp to render the page in a headless browser,
+// performs infinite scrolling, then parses the final HTML with goquery.
+func scrapeWithRenderer(logger *slog.Logger, cfg *config.Config, site config.SiteConfig) error {
 	siteLogger := logger.With(slog.String("site", site.Name))
 
-	siteLogger.Info("Starting scraper for target",
+	siteLogger.Info("Starting renderer-based scraper",
+		slog.String("url", site.URL),
+		slog.Duration("scroll_timeout", cfg.Scraper.ScrollTimeout),
+		slog.Duration("scroll_delay", cfg.Scraper.ScrollDelay),
+	)
+
+	// Dynamic output filename based on site name
+	filename := fmt.Sprintf("output_%s.csv", site.Name)
+	writer, err := storage.NewCSVWriter(filename)
+	if err != nil {
+		return fmt.Errorf("failed to create CSV writer: %w", err)
+	}
+	defer writer.Close()
+
+	// --- 1. Fetch fully-rendered HTML via headless browser ---
+	htmlContent, err := fetcher.FetchDynamicHTML(site.URL, cfg)
+	if err != nil {
+		return fmt.Errorf("failed to fetch dynamic HTML: %w", err)
+	}
+
+	// --- 2. Parse with goquery (reuse existing selectors) ---
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
+	if err != nil {
+		return fmt.Errorf("failed to parse HTML with goquery: %w", err)
+	}
+
+	// --- 3. Extract products using the same CSS selectors from scraper.yaml ---
+	var productCount int
+	doc.Find(site.Selectors.Container).Each(func(i int, s *goquery.Selection) {
+		product := models.Product{
+			ID:    cleanText(s.AttrOr("data-id", "")),
+			Name:  cleanText(s.Find(site.Selectors.Title).Text()),
+			Price: cleanText(s.Find(site.Selectors.Price).Text()),
+		}
+
+		// Extract URL from link element
+		if href, exists := s.Find(site.Selectors.URL).Attr("href"); exists {
+			// Make absolute URL if relative
+			if strings.HasPrefix(href, "/") {
+				product.URL = site.URL + href
+			} else {
+				product.URL = href
+			}
+		}
+
+		if err := writer.Write(product); err != nil {
+			siteLogger.Error("failed to write product to CSV",
+				slog.String("name", product.Name),
+				slog.String("error", err.Error()),
+			)
+			return
+		}
+
+		productCount++
+		siteLogger.Info("Saved",
+			slog.String("name", product.Name),
+			slog.String("price", product.Price),
+		)
+	})
+
+	siteLogger.Info("Renderer scraping completed",
+		slog.String("output_file", filename),
+		slog.Int("products_found", productCount),
+	)
+	return nil
+}
+
+// scrapeWithColly uses the traditional Colly-based scraper for static HTML pages.
+func scrapeWithColly(logger *slog.Logger, cfg *config.Config, site config.SiteConfig) error {
+	siteLogger := logger.With(slog.String("site", site.Name))
+
+	siteLogger.Info("Starting Colly-based scraper for target",
 		slog.String("url", site.URL),
 		slog.Int("max_pages", cfg.Scraper.MaxPages),
 	)
